@@ -1,3 +1,4 @@
+#nullable enable
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -7,9 +8,9 @@ namespace Moonbreak
 {
     public partial class DevConsole : CanvasLayer
     {
-        public static DevConsole Instance { get; private set; }
+        public static DevConsole Instance { get; private set; } = null!;
 
-        private ConsoleUI _ui;
+        private ConsoleUI _ui = null!;
 
         public override void _Ready()
         {

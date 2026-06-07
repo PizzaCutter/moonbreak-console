@@ -1,3 +1,4 @@
+#nullable enable
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -9,11 +10,11 @@ namespace Moonbreak
 {
     public class CommandEntry
     {
-        public string Name;
-        public string Category;
-        public string Description;
-        public ParameterInfo[] Parameters;
-        public Func<string[], string?> Invoke;
+        public string Name = null!;
+        public string Category = null!;
+        public string Description = null!;
+        public ParameterInfo[] Parameters = null!;
+        public Func<string[], string?> Invoke = null!;
     }
 
     public static class CommandRegistry
@@ -34,7 +35,7 @@ namespace Moonbreak
                 {
                     foreach (MethodInfo method in type.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
                     {
-                        ConsoleCommandAttribute attr = method.GetCustomAttribute<ConsoleCommandAttribute>();
+                        ConsoleCommandAttribute? attr = method.GetCustomAttribute<ConsoleCommandAttribute>();
                         if (attr == null) { continue; }
 
                         string name = string.IsNullOrEmpty(attr.Name)
