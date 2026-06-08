@@ -66,6 +66,10 @@ namespace Moonbreak
                     _ui.TryExecuteOrCommit();
                     GetViewport().SetInputAsHandled();
                     return;
+                case Key.C when key.CtrlPressed:
+                    _ui.ClearInput();
+                    GetViewport().SetInputAsHandled();
+                    return;
             }
 
             // Let printable characters and text editing keys reach the LineEdit.

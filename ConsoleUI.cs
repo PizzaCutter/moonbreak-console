@@ -190,6 +190,13 @@ namespace Moonbreak
             _inputBar.CallDeferred(Control.MethodName.GrabFocus);
         }
 
+        public void ClearInput()
+        {
+            _inputBar.Text = "";
+            _selectedIndex = 0;
+            RefreshResults("");
+        }
+
         public void FocusInput()
         {
             _inputBar.GrabFocus();
