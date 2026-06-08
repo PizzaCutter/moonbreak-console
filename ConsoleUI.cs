@@ -75,10 +75,35 @@ namespace Moonbreak
 
         private void OnInputSubmitted(string text)
         {
-            DevConsole.Instance.ExecuteRaw(text);
-            _inputBar.Clear();
-            _selectedIndex = 0;
-            RefreshResults("");
+            // Enter is intercepted in DevConsole._Input before reaching LineEdit.
+            // This handler is a fallback only.
+            TryExecuteOrCommit();
+        }
+
+        public void TryExecuteOrCommit()
+        {
+            if (_currentResults.Count == 0 || _selectedIndex >= _currentResults.Count)
+            {
+                string text = _inputBar.Text.Trim();
+                if (!string.IsNullOrEmpty(text))
+                {
+                    DevConsole.Instance.ExecuteRaw(text);
+                    DevConsole.Instance.Close();
+                }
+                return;
+            }
+
+            CommandEntry selected = _currentResults[_selectedIndex];
+            if (selected.Parameters.Length == 0)
+            {
+                DevConsole.Instance.ExecuteRaw(selected.Name);
+                DevConsole.Instance.Close();
+            }
+            else
+            {
+                _inputBar.Text = selected.Name + " ";
+                _inputBar.CaretColumn = _inputBar.Text.Length;
+            }
         }
 
         private void RefreshResults(string query)
@@ -158,7 +183,7 @@ namespace Moonbreak
             CommandEntry cmd = _currentResults[_selectedIndex];
             _inputBar.Text = cmd.Name;
             _inputBar.CaretColumn = cmd.Name.Length;
-            _inputBar.GrabFocus();
+            _inputBar.CallDeferred(Control.MethodName.GrabFocus);
         }
 
         public void FocusInput()

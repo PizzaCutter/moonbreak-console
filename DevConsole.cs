@@ -61,6 +61,11 @@ namespace Moonbreak
                     _ui.CommitSelection();
                     GetViewport().SetInputAsHandled();
                     return;
+                case Key.Enter:
+                case Key.KpEnter:
+                    _ui.TryExecuteOrCommit();
+                    GetViewport().SetInputAsHandled();
+                    return;
             }
 
             // Let printable characters and text editing keys reach the LineEdit.
@@ -71,9 +76,7 @@ namespace Moonbreak
                 || key.Keycode == Key.Left
                 || key.Keycode == Key.Right
                 || key.Keycode == Key.Home
-                || key.Keycode == Key.End
-                || key.Keycode == Key.Enter
-                || key.Keycode == Key.KpEnter;
+                || key.Keycode == Key.End;
 
             if (!isTextKey) { GetViewport().SetInputAsHandled(); }
         }
