@@ -1,3 +1,4 @@
+#nullable enable
 using Godot;
 using System.Collections.Generic;
 using System.Reflection;
@@ -314,6 +315,18 @@ namespace Moonbreak
             _selectedIndex = 0;
             _currentQuery = "";
             RefreshResults("");
+        }
+
+        public string GetInput() => _inputBar.Text;
+
+        public void SetInput(string text)
+        {
+            _inputBar.Text = text;
+            _inputBar.CaretColumn = text.Length;
+            int spaceIdx = text.IndexOf(' ');
+            _currentQuery = spaceIdx >= 0 ? text[..spaceIdx] : text;
+            _selectedIndex = 0;
+            RefreshResults(_currentQuery);
         }
 
         public void FocusInput()

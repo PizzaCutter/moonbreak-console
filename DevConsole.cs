@@ -12,6 +12,13 @@ namespace Moonbreak
 
         private ConsoleUI _ui = null!;
 
+        private readonly List<string> _history = new();
+        private int _historyIndex = -1;
+        private string _savedInput = "";
+
+        private const int MaxHistory = 100;
+        private const string HistoryPath = "user://console_history.json";
+
         public override void _Ready()
         {
             Instance = this;
@@ -19,6 +26,7 @@ namespace Moonbreak
             ProcessMode = ProcessModeEnum.Always;
 
             CommandRegistry.ScanAssemblies();
+            LoadHistory();
 
             _ui = new ConsoleUI();
             AddChild(_ui);
@@ -42,11 +50,18 @@ namespace Moonbreak
 
             if (!_ui.Visible) { return; }
 
-            // Console-specific keys
             switch (key.Keycode)
             {
                 case Key.Escape:
                     Close();
+                    GetViewport().SetInputAsHandled();
+                    return;
+                case Key.Up when key.CtrlPressed:
+                    NavigateHistory(-1);
+                    GetViewport().SetInputAsHandled();
+                    return;
+                case Key.Down when key.CtrlPressed:
+                    NavigateHistory(1);
                     GetViewport().SetInputAsHandled();
                     return;
                 case Key.Up:
@@ -72,8 +87,6 @@ namespace Moonbreak
                     return;
             }
 
-            // Let printable characters and text editing keys reach the LineEdit.
-            // Block everything else (game actions, movement keys, etc).
             bool isTextKey = key.Unicode != 0
                 || key.Keycode == Key.Backspace
                 || key.Keycode == Key.Delete
@@ -85,8 +98,43 @@ namespace Moonbreak
             if (!isTextKey) { GetViewport().SetInputAsHandled(); }
         }
 
+        private void NavigateHistory(int delta)
+        {
+            if (_history.Count == 0) { return; }
+
+            if (delta < 0) // Ctrl+Up — older
+            {
+                if (_historyIndex == -1)
+                {
+                    _savedInput = _ui.GetInput();
+                    _historyIndex = _history.Count - 1;
+                }
+                else
+                {
+                    _historyIndex = Mathf.Max(0, _historyIndex - 1);
+                }
+                _ui.SetInput(_history[_historyIndex]);
+            }
+            else // Ctrl+Down — newer
+            {
+                if (_historyIndex == -1) { return; }
+                _historyIndex++;
+                if (_historyIndex >= _history.Count)
+                {
+                    _historyIndex = -1;
+                    _ui.SetInput(_savedInput);
+                }
+                else
+                {
+                    _ui.SetInput(_history[_historyIndex]);
+                }
+            }
+        }
+
         public void Open()
         {
+            _historyIndex = -1;
+            _savedInput = "";
             GetTree().Paused = true;
             _ui.Show();
             _ui.FocusInput();
@@ -98,10 +146,36 @@ namespace Moonbreak
             GetTree().Paused = false;
         }
 
+        private void SaveHistory()
+        {
+            using FileAccess file = FileAccess.Open(HistoryPath, FileAccess.ModeFlags.Write);
+            if (file == null) { return; }
+            file.StoreString(Json.Stringify(_history.ToArray()));
+        }
+
+        private void LoadHistory()
+        {
+            if (!FileAccess.FileExists(HistoryPath)) { return; }
+            using FileAccess file = FileAccess.Open(HistoryPath, FileAccess.ModeFlags.Read);
+            if (file == null) { return; }
+            Godot.Collections.Array parsed = Json.ParseString(file.GetAsText()).AsGodotArray();
+            foreach (Godot.Variant entry in parsed)
+            {
+                _history.Add(entry.AsString());
+            }
+        }
+
         public void ExecuteRaw(string input)
         {
             string trimmed = input.Trim();
             if (string.IsNullOrEmpty(trimmed)) { return; }
+
+            if (_history.Count == 0 || _history[^1] != trimmed)
+            {
+                _history.Add(trimmed);
+                if (_history.Count > MaxHistory) { _history.RemoveAt(0); }
+                SaveHistory();
+            }
 
             string[] parts = trimmed.Split(' ', StringSplitOptions.RemoveEmptyEntries);
             string commandQuery = parts[0];
@@ -114,7 +188,6 @@ namespace Moonbreak
                 return;
             }
 
-            // Exact name match first, otherwise top fuzzy result
             CommandEntry cmd = results.Find(c => c.Name.ToLowerInvariant() == commandQuery.ToLowerInvariant())
                       ?? results[0];
 
