@@ -16,6 +16,7 @@ namespace Moonbreak
         {
             Instance = this;
             Layer = 128;
+            ProcessMode = ProcessModeEnum.Always;
 
             CommandRegistry.ScanAssemblies();
 
@@ -41,15 +42,45 @@ namespace Moonbreak
 
             if (!_ui.Visible) { return; }
 
-            if (key.Keycode == Key.Escape)
+            // Console-specific keys
+            switch (key.Keycode)
             {
-                Close();
-                GetViewport().SetInputAsHandled();
+                case Key.Escape:
+                    Close();
+                    GetViewport().SetInputAsHandled();
+                    return;
+                case Key.Up:
+                    _ui.MoveSelection(-1);
+                    GetViewport().SetInputAsHandled();
+                    return;
+                case Key.Down:
+                    _ui.MoveSelection(1);
+                    GetViewport().SetInputAsHandled();
+                    return;
+                case Key.Tab:
+                    _ui.CommitSelection();
+                    GetViewport().SetInputAsHandled();
+                    return;
             }
+
+            // Let printable characters and text editing keys reach the LineEdit.
+            // Block everything else (game actions, movement keys, etc).
+            bool isTextKey = key.Unicode != 0
+                || key.Keycode == Key.Backspace
+                || key.Keycode == Key.Delete
+                || key.Keycode == Key.Left
+                || key.Keycode == Key.Right
+                || key.Keycode == Key.Home
+                || key.Keycode == Key.End
+                || key.Keycode == Key.Enter
+                || key.Keycode == Key.KpEnter;
+
+            if (!isTextKey) { GetViewport().SetInputAsHandled(); }
         }
 
         public void Open()
         {
+            GetTree().Paused = true;
             _ui.Show();
             _ui.FocusInput();
         }
@@ -57,11 +88,7 @@ namespace Moonbreak
         public void Close()
         {
             _ui.Hide();
-        }
-
-        public void ClearLog()
-        {
-            _ui.ClearLog();
+            GetTree().Paused = false;
         }
 
         public void ExecuteRaw(string input)
@@ -76,7 +103,6 @@ namespace Moonbreak
             List<CommandEntry> results = CommandRegistry.Query(commandQuery);
             if (results.Count == 0)
             {
-                _ui.AppendLog($"Unknown command: {commandQuery}");
                 GD.Print($"[Console] Unknown command: {commandQuery}");
                 return;
             }
@@ -90,15 +116,13 @@ namespace Moonbreak
                 string? output = cmd.Invoke(args);
                 if (!string.IsNullOrEmpty(output))
                 {
-                    _ui.AppendLog(output);
                     GD.Print($"[Console] {output}");
                 }
             }
             catch (Exception e)
             {
                 string msg = e.InnerException?.Message ?? e.Message;
-                _ui.AppendLog($"Error: {msg}");
-                GD.PrintErr($"[Console] {msg}");
+                GD.PrintErr($"[Console] Error: {msg}");
             }
         }
     }

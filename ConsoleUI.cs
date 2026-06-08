@@ -1,14 +1,18 @@
 using Godot;
 using System.Collections.Generic;
+using System.Reflection;
 
 namespace Moonbreak
 {
     public partial class ConsoleUI : Control
     {
-        private LineEdit _inputBar;
-        private VBoxContainer _resultsList;
-        private VBoxContainer _logList;
-        private ScrollContainer _logScroll;
+        private LineEdit _inputBar = null!;
+        private VBoxContainer _resultsList = null!;
+        private List<CommandEntry> _currentResults = new();
+        private List<PanelContainer> _rows = new();
+        private int _selectedIndex = 0;
+
+        private static readonly Color HighlightColor = new Color("#2d5a8e");
 
         public override void _Ready()
         {
@@ -18,7 +22,7 @@ namespace Moonbreak
         private void BuildUI()
         {
             // Darken full screen
-            var overlay = new ColorRect
+            ColorRect overlay = new ColorRect
             {
                 Color = new Color("#00000088"),
                 AnchorRight = 1,
@@ -26,17 +30,19 @@ namespace Moonbreak
             };
             AddChild(overlay);
 
-            // Modal panel — centered, 640×480
-            var panel = new PanelContainer();
-            panel.SetAnchorsPreset(Control.LayoutPreset.Center);
-            panel.CustomMinimumSize = new Vector2(640, 480);
-            AddChild(panel);
+            // CenterContainer fills viewport and centers the modal
+            CenterContainer center = new CenterContainer();
+            center.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+            AddChild(center);
 
-            var vbox = new VBoxContainer();
+            PanelContainer panel = new PanelContainer();
+            panel.CustomMinimumSize = new Vector2(640, 400);
+            center.AddChild(panel);
+
+            VBoxContainer vbox = new VBoxContainer();
             vbox.AddThemeConstantOverride("separation", 4);
             panel.AddChild(vbox);
 
-            // Input bar
             _inputBar = new LineEdit
             {
                 PlaceholderText = "Type a command...",
@@ -46,39 +52,24 @@ namespace Moonbreak
             _inputBar.TextSubmitted += OnInputSubmitted;
             vbox.AddChild(_inputBar);
 
-            // Results list
-            var resultsScroll = new ScrollContainer
+            ScrollContainer resultsScroll = new ScrollContainer
             {
-                CustomMinimumSize = new Vector2(0, 200),
+                CustomMinimumSize = new Vector2(0, 300),
             };
             vbox.AddChild(resultsScroll);
 
             _resultsList = new VBoxContainer();
-            _resultsList.AddThemeConstantOverride("separation", 2);
+            _resultsList.AddThemeConstantOverride("separation", 0);
             resultsScroll.AddChild(_resultsList);
-
-            // Separator
-            vbox.AddChild(new HSeparator());
-
-            // Log pane
-            _logScroll = new ScrollContainer
-            {
-                CustomMinimumSize = new Vector2(0, 180),
-            };
-            vbox.AddChild(_logScroll);
-
-            _logList = new VBoxContainer();
-            _logList.AddThemeConstantOverride("separation", 2);
-            _logScroll.AddChild(_logList);
 
             SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
 
-            // Show all commands initially
             RefreshResults("");
         }
 
         private void OnInputChanged(string text)
         {
+            _selectedIndex = 0;
             RefreshResults(text);
         }
 
@@ -86,6 +77,7 @@ namespace Moonbreak
         {
             DevConsole.Instance.ExecuteRaw(text);
             _inputBar.Clear();
+            _selectedIndex = 0;
             RefreshResults("");
         }
 
@@ -95,43 +87,78 @@ namespace Moonbreak
             {
                 child.QueueFree();
             }
+            _rows.Clear();
 
-            var results = CommandRegistry.Query(query);
-            foreach (var cmd in results)
+            _currentResults = CommandRegistry.Query(query);
+
+            for (int i = 0; i < _currentResults.Count; i++)
             {
-                var label = new Label
+                CommandEntry cmd = _currentResults[i];
+
+                PanelContainer row = new PanelContainer();
+                _resultsList.AddChild(row);
+                _rows.Add(row);
+
+                Label label = new Label
                 {
-                    Text = $"{cmd.Category}.{cmd.Name}  —  {cmd.Description}",
+                    Text = BuildRowText(cmd),
                     AutowrapMode = TextServer.AutowrapMode.Off,
                 };
-                _resultsList.AddChild(label);
+                row.AddChild(label);
+            }
+
+            UpdateRowStyles();
+        }
+
+        private void UpdateRowStyles()
+        {
+            for (int i = 0; i < _rows.Count; i++)
+            {
+                if (i == _selectedIndex)
+                {
+                    StyleBoxFlat style = new StyleBoxFlat { BgColor = HighlightColor };
+                    _rows[i].AddThemeStyleboxOverride("panel", style);
+                }
+                else
+                {
+                    _rows[i].RemoveThemeStyleboxOverride("panel");
+                }
             }
         }
 
-        public void AppendLog(string message)
+        private string BuildRowText(CommandEntry cmd)
         {
-            var label = new Label
-            {
-                Text = message,
-                AutowrapMode = TextServer.AutowrapMode.Word,
-            };
-            _logList.AddChild(label);
-
-            // Scroll to bottom next frame
-            CallDeferred(MethodName.ScrollLogToBottom);
+            string paramHint = BuildParamHint(cmd.Parameters);
+            return string.IsNullOrEmpty(paramHint)
+                ? $"{cmd.Category}.{cmd.Name}  —  {cmd.Description}"
+                : $"{cmd.Category}.{cmd.Name} {paramHint}  —  {cmd.Description}";
         }
 
-        private void ScrollLogToBottom()
+        private string BuildParamHint(ParameterInfo[] parameters)
         {
-            _logScroll.ScrollVertical = (int)_logScroll.GetVScrollBar().MaxValue;
-        }
-
-        public void ClearLog()
-        {
-            foreach (Node child in _logList.GetChildren())
+            if (parameters == null || parameters.Length == 0) { return ""; }
+            System.Text.StringBuilder sb = new System.Text.StringBuilder();
+            foreach (ParameterInfo p in parameters)
             {
-                child.QueueFree();
+                sb.Append($"<{p.Name}:{p.ParameterType.Name}> ");
             }
+            return sb.ToString().TrimEnd();
+        }
+
+        public void MoveSelection(int delta)
+        {
+            if (_currentResults.Count == 0) { return; }
+            _selectedIndex = (_selectedIndex + delta + _currentResults.Count) % _currentResults.Count;
+            UpdateRowStyles();
+        }
+
+        public void CommitSelection()
+        {
+            if (_currentResults.Count == 0 || _selectedIndex >= _currentResults.Count) { return; }
+            CommandEntry cmd = _currentResults[_selectedIndex];
+            _inputBar.Text = cmd.Name;
+            _inputBar.CaretColumn = cmd.Name.Length;
+            _inputBar.GrabFocus();
         }
 
         public void FocusInput()
