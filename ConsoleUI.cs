@@ -14,8 +14,40 @@ namespace Moonbreak
         private int _selectedIndex = 0;
         private string _currentQuery = "";
 
-        private static readonly Color HighlightColor = new Color("#2d5a8e");
-        private static readonly Color MatchColor = new Color("#ffcc44");
+        // Palette
+        private static readonly Color BgDark     = new Color("#0b0c0d");
+        private static readonly Color BgInput    = new Color("#13151a");
+        private static readonly Color BgRow      = new Color("#0f1012");
+        private static readonly Color BgSelected = new Color("#162a1e");
+        private static readonly Color Accent     = new Color("#3ddc84");
+        private static readonly Color TextMain   = new Color("#d0d0d0");
+        private static readonly Color TextDim    = new Color("#4a4a4a");
+        private static readonly Color TextDesc   = new Color("#7a7a7a");
+        private static readonly Color Border     = new Color("#222426");
+        private static readonly Color MatchColor = new Color("#3ddc84");
+
+        private static StyleBoxFlat Flat(Color bg, int padH = 0, int padV = 0,
+            int borderLeft = 0, Color? borderCol = null)
+        {
+            StyleBoxFlat s = new StyleBoxFlat
+            {
+                BgColor = bg,
+                BorderWidthLeft = borderLeft,
+                BorderColor = borderCol ?? Colors.Transparent,
+                ContentMarginLeft = padH + borderLeft,
+                ContentMarginRight = padH,
+                ContentMarginTop = padV,
+                ContentMarginBottom = padV,
+            };
+            return s;
+        }
+
+        private static HSeparator MakeSep()
+        {
+            HSeparator sep = new HSeparator();
+            sep.AddThemeColorOverride("color", Border);
+            return sep;
+        }
 
         public override void _Ready()
         {
@@ -24,38 +56,65 @@ namespace Moonbreak
 
         private void BuildUI()
         {
-            // Darken full screen
             ColorRect overlay = new ColorRect
             {
-                Color = new Color("#00000088"),
+                Color = new Color("#000000cc"),
                 AnchorRight = 1,
                 AnchorBottom = 1,
             };
             AddChild(overlay);
 
-            // CenterContainer fills viewport and centers the modal
             CenterContainer center = new CenterContainer();
             center.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
             AddChild(center);
 
+            // Main panel
             PanelContainer panel = new PanelContainer();
-            panel.CustomMinimumSize = new Vector2(640, 400);
+            panel.CustomMinimumSize = new Vector2(700, 440);
+            StyleBoxFlat panelStyle = new StyleBoxFlat
+            {
+                BgColor = BgDark,
+                BorderWidthLeft = 1, BorderWidthRight = 1,
+                BorderWidthTop = 1,  BorderWidthBottom = 1,
+                BorderColor = Border,
+            };
+            panel.AddThemeStyleboxOverride("panel", panelStyle);
             center.AddChild(panel);
 
             VBoxContainer vbox = new VBoxContainer();
-            vbox.AddThemeConstantOverride("separation", 4);
+            vbox.AddThemeConstantOverride("separation", 0);
             panel.AddChild(vbox);
 
-            HBoxContainer inputRow = new HBoxContainer();
-            inputRow.AddThemeConstantOverride("separation", 8);
-            vbox.AddChild(inputRow);
+            // Input row
+            PanelContainer inputPanel = new PanelContainer();
+            inputPanel.AddThemeStyleboxOverride("panel", Flat(BgInput, 10, 6));
+            vbox.AddChild(inputPanel);
 
+            HBoxContainer inputRow = new HBoxContainer();
+            inputRow.AddThemeConstantOverride("separation", 6);
+            inputPanel.AddChild(inputRow);
+
+            Label prompt = new Label
+            {
+                Text = ">",
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            prompt.AddThemeColorOverride("font_color", Accent);
+            inputRow.AddChild(prompt);
+
+            StyleBoxFlat inputStyle = Flat(Colors.Transparent, 4, 2);
             _inputBar = new LineEdit
             {
-                PlaceholderText = "Type a command...",
-                CustomMinimumSize = new Vector2(0, 32),
+                PlaceholderText = "type command...",
+                CustomMinimumSize = new Vector2(0, 24),
                 SizeFlagsHorizontal = SizeFlags.ExpandFill,
             };
+            _inputBar.AddThemeStyleboxOverride("normal", inputStyle);
+            _inputBar.AddThemeStyleboxOverride("focus", inputStyle);
+            _inputBar.AddThemeColorOverride("font_color", TextMain);
+            _inputBar.AddThemeColorOverride("font_placeholder_color", TextDim);
+            _inputBar.AddThemeColorOverride("caret_color", Accent);
+            _inputBar.AddThemeColorOverride("selection_color", BgSelected);
             _inputBar.TextChanged += OnInputChanged;
             _inputBar.TextSubmitted += OnInputSubmitted;
             inputRow.AddChild(_inputBar);
@@ -63,18 +122,24 @@ namespace Moonbreak
             _countLabel = new Label
             {
                 VerticalAlignment = VerticalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Right,
                 CustomMinimumSize = new Vector2(64, 0),
             };
+            _countLabel.AddThemeColorOverride("font_color", TextDim);
             inputRow.AddChild(_countLabel);
 
+            vbox.AddChild(MakeSep());
+
+            // Results list
             ScrollContainer resultsScroll = new ScrollContainer
             {
-                CustomMinimumSize = new Vector2(0, 300),
+                CustomMinimumSize = new Vector2(0, 360),
             };
             vbox.AddChild(resultsScroll);
 
             _resultsList = new VBoxContainer();
             _resultsList.AddThemeConstantOverride("separation", 0);
+            _resultsList.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             resultsScroll.AddChild(_resultsList);
 
             SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
@@ -92,8 +157,6 @@ namespace Moonbreak
 
         private void OnInputSubmitted(string text)
         {
-            // Enter is intercepted in DevConsole._Input before reaching LineEdit.
-            // This handler is a fallback only.
             TryExecuteOrCommit();
         }
 
@@ -141,6 +204,8 @@ namespace Moonbreak
                 CommandEntry cmd = _currentResults[i];
 
                 PanelContainer row = new PanelContainer();
+                row.AddThemeStyleboxOverride("panel", Flat(BgRow, 12, 4));
+                row.SizeFlagsHorizontal = SizeFlags.ExpandFill;
                 _resultsList.AddChild(row);
                 _rows.Add(row);
 
@@ -158,12 +223,11 @@ namespace Moonbreak
             {
                 if (i == _selectedIndex)
                 {
-                    StyleBoxFlat style = new StyleBoxFlat { BgColor = HighlightColor };
-                    _rows[i].AddThemeStyleboxOverride("panel", style);
+                    _rows[i].AddThemeStyleboxOverride("panel", Flat(BgSelected, 12, 4, 2, Accent));
                 }
                 else
                 {
-                    _rows[i].RemoveThemeStyleboxOverride("panel");
+                    _rows[i].AddThemeStyleboxOverride("panel", Flat(BgRow, 12, 4));
                 }
             }
         }
@@ -187,16 +251,32 @@ namespace Moonbreak
                     AutowrapMode = TextServer.AutowrapMode.Off,
                     VerticalAlignment = VerticalAlignment.Center,
                 };
-                if (isMatch) { seg.AddThemeColorOverride("font_color", MatchColor); }
+                seg.AddThemeColorOverride("font_color", isMatch ? MatchColor : TextMain);
                 hbox.AddChild(seg);
                 i = j;
             }
 
             string paramHint = BuildParamHint(cmd.Parameters);
-            string suffix = string.IsNullOrEmpty(paramHint)
-                ? $"  —  {cmd.Description}"
-                : $" {paramHint}  —  {cmd.Description}";
-            hbox.AddChild(new Label { Text = suffix, AutowrapMode = TextServer.AutowrapMode.Off });
+            if (!string.IsNullOrEmpty(paramHint))
+            {
+                Label hint = new Label
+                {
+                    Text = $" {paramHint}",
+                    AutowrapMode = TextServer.AutowrapMode.Off,
+                    VerticalAlignment = VerticalAlignment.Center,
+                };
+                hint.AddThemeColorOverride("font_color", TextDim);
+                hbox.AddChild(hint);
+            }
+
+            Label desc = new Label
+            {
+                Text = $"  {cmd.Description}",
+                AutowrapMode = TextServer.AutowrapMode.Off,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            desc.AddThemeColorOverride("font_color", TextDesc);
+            hbox.AddChild(desc);
 
             return hbox;
         }
