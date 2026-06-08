@@ -120,18 +120,5 @@ LineEdit.TextSubmitted
   → GD.Print(output)                      ← mirrors to Godot output
 ```
 
-## Todo
-
-- **Remove log pane** — output goes to `GD.Print` only.
-- **Fix centering** — modal is fixed size, centered in viewport.
-- **Row highlight** — selected result row gets background color highlight.
-- **Tab to commit** — Tab key writes selected command name into input bar (replacing current text) so user can append arguments.
-- **Up/Down navigation** — arrow keys move selection through results list, wraps around.
-- **Input blocking** — while console open, `DevConsole._Input()` calls `SetInputAsHandled()` for all non-console keys so input doesn't bleed to game.
-- **Ghost text** — deferred. Godot `LineEdit` doesn't support inline mixed-color text natively.
-
 ## Future Work
-
 - **Editor-time console** — runtime-only. Editor support needs `@tool`, `EditorInterface` viewport input, and a separate UI layer. `CanvasLayer` and `_Ready`-based scanning don't run in editor context.
-- **Command history** — recall previous commands with arrow keys, persisted across sessions.
-- **Preview pane**

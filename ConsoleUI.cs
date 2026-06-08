@@ -70,7 +70,9 @@ namespace Moonbreak
         private void OnInputChanged(string text)
         {
             _selectedIndex = 0;
-            RefreshResults(text);
+            int spaceIdx = text.IndexOf(' ');
+            string query = spaceIdx >= 0 ? text[..spaceIdx] : text;
+            RefreshResults(query);
         }
 
         private void OnInputSubmitted(string text)
@@ -94,9 +96,11 @@ namespace Moonbreak
             }
 
             CommandEntry selected = _currentResults[_selectedIndex];
-            if (selected.Parameters.Length == 0)
+            bool hasParams = _inputBar.Text.Contains(' ');
+            if (selected.Parameters.Length == 0 || hasParams)
             {
-                DevConsole.Instance.ExecuteRaw(selected.Name);
+                string raw = hasParams ? _inputBar.Text.Trim() : selected.Name;
+                DevConsole.Instance.ExecuteRaw(raw);
                 DevConsole.Instance.Close();
             }
             else
