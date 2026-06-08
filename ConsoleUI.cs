@@ -7,6 +7,7 @@ namespace Moonbreak
     public partial class ConsoleUI : Control
     {
         private LineEdit _inputBar = null!;
+        private Label _countLabel = null!;
         private VBoxContainer _resultsList = null!;
         private List<CommandEntry> _currentResults = new();
         private List<PanelContainer> _rows = new();
@@ -43,14 +44,26 @@ namespace Moonbreak
             vbox.AddThemeConstantOverride("separation", 4);
             panel.AddChild(vbox);
 
+            HBoxContainer inputRow = new HBoxContainer();
+            inputRow.AddThemeConstantOverride("separation", 8);
+            vbox.AddChild(inputRow);
+
             _inputBar = new LineEdit
             {
                 PlaceholderText = "Type a command...",
                 CustomMinimumSize = new Vector2(0, 32),
+                SizeFlagsHorizontal = SizeFlags.ExpandFill,
             };
             _inputBar.TextChanged += OnInputChanged;
             _inputBar.TextSubmitted += OnInputSubmitted;
-            vbox.AddChild(_inputBar);
+            inputRow.AddChild(_inputBar);
+
+            _countLabel = new Label
+            {
+                VerticalAlignment = VerticalAlignment.Center,
+                CustomMinimumSize = new Vector2(64, 0),
+            };
+            inputRow.AddChild(_countLabel);
 
             ScrollContainer resultsScroll = new ScrollContainer
             {
@@ -119,6 +132,7 @@ namespace Moonbreak
             _rows.Clear();
 
             _currentResults = CommandRegistry.Query(query);
+            _countLabel.Text = $"{_currentResults.Count}/{CommandRegistry.All.Count}";
 
             for (int i = 0; i < _currentResults.Count; i++)
             {
