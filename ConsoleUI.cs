@@ -12,8 +12,10 @@ namespace Moonbreak
         private List<CommandEntry> _currentResults = new();
         private List<PanelContainer> _rows = new();
         private int _selectedIndex = 0;
+        private string _currentQuery = "";
 
         private static readonly Color HighlightColor = new Color("#2d5a8e");
+        private static readonly Color MatchColor = new Color("#ffcc44");
 
         public override void _Ready()
         {
@@ -84,8 +86,8 @@ namespace Moonbreak
         {
             _selectedIndex = 0;
             int spaceIdx = text.IndexOf(' ');
-            string query = spaceIdx >= 0 ? text[..spaceIdx] : text;
-            RefreshResults(query);
+            _currentQuery = spaceIdx >= 0 ? text[..spaceIdx] : text;
+            RefreshResults(_currentQuery);
         }
 
         private void OnInputSubmitted(string text)
@@ -142,12 +144,9 @@ namespace Moonbreak
                 _resultsList.AddChild(row);
                 _rows.Add(row);
 
-                Label label = new Label
-                {
-                    Text = BuildRowText(cmd),
-                    AutowrapMode = TextServer.AutowrapMode.Off,
-                };
-                row.AddChild(label);
+                string key = $"{cmd.Category}.{cmd.Name}";
+                HashSet<int>? matchPos = FuzzySearch.GetMatchPositions(_currentQuery, key);
+                row.AddChild(BuildRowLabel(cmd, key, matchPos));
             }
 
             UpdateRowStyles();
@@ -169,12 +168,37 @@ namespace Moonbreak
             }
         }
 
-        private string BuildRowText(CommandEntry cmd)
+        private HBoxContainer BuildRowLabel(CommandEntry cmd, string key, HashSet<int>? matchPos)
         {
+            HBoxContainer hbox = new HBoxContainer();
+            hbox.AddThemeConstantOverride("separation", 0);
+            hbox.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+
+            int i = 0;
+            while (i < key.Length)
+            {
+                bool isMatch = matchPos != null && matchPos.Contains(i);
+                int j = i + 1;
+                while (j < key.Length && (matchPos != null && matchPos.Contains(j)) == isMatch) { j++; }
+
+                Label seg = new Label
+                {
+                    Text = key[i..j],
+                    AutowrapMode = TextServer.AutowrapMode.Off,
+                    VerticalAlignment = VerticalAlignment.Center,
+                };
+                if (isMatch) { seg.AddThemeColorOverride("font_color", MatchColor); }
+                hbox.AddChild(seg);
+                i = j;
+            }
+
             string paramHint = BuildParamHint(cmd.Parameters);
-            return string.IsNullOrEmpty(paramHint)
-                ? $"{cmd.Category}.{cmd.Name}  —  {cmd.Description}"
-                : $"{cmd.Category}.{cmd.Name} {paramHint}  —  {cmd.Description}";
+            string suffix = string.IsNullOrEmpty(paramHint)
+                ? $"  —  {cmd.Description}"
+                : $" {paramHint}  —  {cmd.Description}";
+            hbox.AddChild(new Label { Text = suffix, AutowrapMode = TextServer.AutowrapMode.Off });
+
+            return hbox;
         }
 
         private string BuildParamHint(ParameterInfo[] parameters)
@@ -208,6 +232,7 @@ namespace Moonbreak
         {
             _inputBar.Text = "";
             _selectedIndex = 0;
+            _currentQuery = "";
             RefreshResults("");
         }
 
