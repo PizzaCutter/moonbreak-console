@@ -1,11 +1,8 @@
 # Moonbreak Console
 
-Developer console for Godot 4 C# (.NET 8). Floating modal overlay with fuzzy command search.
+Developer console for Godot 4 C# (.NET 8). Floating modal overlay with fuzzy command search heavily inspired by Telescope for nvim.
 
-## Requirements
-
-- Godot 4.x
-- .NET 8 — C# only, no GDScript support (accepted tradeoff)
+![Moonbreak Console demo](example.gif)
 
 ## Installation
 
@@ -19,13 +16,50 @@ Enable in Godot: **Project → Project Settings → Plugins → Moonbreak Consol
 
 ## Usage
 
-Press **backtick** to open. Type to fuzzy-search commands. Enter to execute. Escape to close.
+Press **backtick** (`` ` ``) to open. Type to fuzzy-search commands. Escape to close.
 
 To override the backtick, define an action named `dev_console_toggle` in Godot's Input Map.
 
+## Keyboard Shortcuts
+
+| Key | Action |
+|---|---|
+| `` ` `` | Open / close console |
+| `Escape` | Close console |
+| `Enter` | Execute selected command (or autocomplete if params required) |
+| `Tab` | Commit highlighted result into input bar |
+| `Up` / `Down` | Move selection through results list |
+| `Ctrl+Up` / `Ctrl+Down` | Cycle backwards / forwards through command history |
+| `Ctrl+C` | Clear the input bar |
+
+## Command Execution
+
+Typing and pressing Enter on a command with no parameters executes it immediately.
+
+For commands with parameters, the first Enter autocompletes `Category.Name ` into the input bar — type your arguments, then Enter again to execute:
+
+```
+> Engine.SetTimescale 0.5   ← Enter executes directly once params are present
+```
+
+## Command History
+
+Executed commands are saved to `user://console_history.json` and restored across sessions (up to 100 entries). Consecutive duplicates are not stored. Use `Ctrl+Up` / `Ctrl+Down` to navigate. Navigating past the newest entry restores whatever you had typed before browsing.
+
+## Fuzzy Search
+
+Two match modes, sorted descending by score:
+
+- **Substring match** — `kil` in `AI.KillAllEnemies` → score 1000+
+- **Fuzzy non-contiguous** — `kle` matches `AI.KillAllEnemies` (k…l…e in order) → lower score
+
+Results update on every keypress. Matched characters are highlighted in the results list. Search only applies to `Category.Name` — typing a space switches to parameter entry without affecting the results.
+
+The counter in the top-right of the input bar shows `matched/total` commands.
+
 ## Registering Commands
 
-Decorate any `static` method with `[ConsoleCommand]`. Any return type works — `void` produces no log output, anything else is converted via `.ToString()`:
+Decorate any `static` method with `[ConsoleCommand]`. Any return type works — `void` produces no output, anything else is printed via `.ToString()`:
 
 ```csharp
 using Moonbreak;
@@ -49,27 +83,18 @@ public static class Cheats
 
 No wiring needed. The registry scans all loaded assemblies at startup via reflection.
 
-Methods can take parameters — parsed from the console input by type:
+Methods can take parameters — parsed from console input by type:
 
 ```csharp
 [ConsoleCommand(Category = "Engine", Description = "Set timescale")]
 private static void SetTimescale(float value) { Engine.TimeScale = value; }
 ```
 
-For runtime-dynamic commands, use the manual escape hatch:
+For runtime-dynamic commands, use the manual registration escape hatch:
 
 ```csharp
 CommandRegistry.Register("mycommand", "Category", "Description", args => "output");
 ```
-
-## Fuzzy Search
-
-Two match modes, sorted descending by score:
-
-- **Substring match** — `kil` in `KillAllEnemies` → score 1000+
-- **Fuzzy non-contiguous** — `kle` matches `KillAllEnemies` (k…l…e in order) → lower score
-
-Results list updates on every keypress.
 
 ## Built-in Commands
 
@@ -80,45 +105,11 @@ Results list updates on every keypress.
 | `quit` | Quits the application |
 | `timescale <float>` | Sets `Engine.TimeScale` |
 
-## Architecture
+## About
 
-### 3 layers
+This project was built with heavy AI assistance (Claude) as a learning exercise in AI-collaborative development. The goal was figuring out how to work effectively with AI as a programming tool, not just using it as an autocomplete.
 
-**Pure logic — no Godot dependency**
+## Notes
 
-| File | Role |
-|---|---|
-| `ConsoleCommandAttribute.cs` | Attribute that decorates static methods. Stores `Name`, `Category`, `Description`. |
-| `FuzzySearch.cs` | `Score(query, candidate)` — substring hits score 1000+, fuzzy hits score lower, no match returns -1. |
-| `CommandRegistry.cs` | Scans assemblies at startup, wraps tagged methods as `CommandEntry` delegates. `Query(input)` returns fuzzy-ranked results. |
-
-**Godot runtime**
-
-| File | Role |
-|---|---|
-| `DevConsole.cs` | Autoload singleton (`CanvasLayer`, layer 128). Handles toggle input, owns `ConsoleUI`, dispatches `ExecuteRaw()`. |
-| `ConsoleUI.cs` | UI built in pure C# — no `.tscn`. `LineEdit` → results list → log pane. |
-| `BuiltinCommands.cs` | `help`, `clear`, `quit`, `timescale` — registered via `[ConsoleCommand]` like any user command. |
-
-**Godot editor**
-
-| File | Role |
-|---|---|
-| `plugin.cfg` | Addon metadata. Points to `plugin.gd`. |
-| `plugin.gd` | EditorPlugin — `_enable_plugin` registers `DevConsole` autoload, `_disable_plugin` removes it. |
-
-### Data flow
-
-```
-LineEdit.TextSubmitted
-  → DevConsole.ExecuteRaw(input)
-  → split → commandQuery + args[]
-  → CommandRegistry.Query(commandQuery)   ← fuzzy scores all commands
-  → ConvertArgs(args, parameters)         ← "0.5" → 0.5f etc.
-  → cmd.Invoke(args)                      ← calls your static method
-  → ConsoleUI.AppendLog(output)           ← shows in log pane
-  → GD.Print(output)                      ← mirrors to Godot output
-```
-
-## Future Work
 - **Editor-time console** — runtime-only. Editor support needs `@tool`, `EditorInterface` viewport input, and a separate UI layer. `CanvasLayer` and `_Ready`-based scanning don't run in editor context.
+- **History file location** — `user://` resolves to `%APPDATA%/Godot/app_userdata/<project_name>/` on Windows.
