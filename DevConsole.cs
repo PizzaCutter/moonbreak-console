@@ -191,19 +191,57 @@ namespace Moonbreak
             CommandEntry cmd = results.Find(c => c.Name.ToLowerInvariant() == commandQuery.ToLowerInvariant())
                       ?? results[0];
 
-            try
+            if (cmd.InstanceMethod != null)
             {
-                string? output = cmd.Invoke(args);
-                if (!string.IsNullOrEmpty(output))
+                List<Node> matches = FindNodesOfType(GetTree().Root, cmd.TargetType!);
+                if (matches.Count == 0)
                 {
-                    GD.Print($"[Console] {output}");
+                    GD.Print($"[Console] {cmd.Name}: no instances found.");
+                    return;
+                }
+                foreach (Node node in matches)
+                {
+                    try
+                    {
+                        object?[] converted = CommandRegistry.ConvertArgs(args, cmd.InstanceMethod.GetParameters());
+                        object? result = cmd.InstanceMethod.Invoke(node, converted);
+                        string? output = result?.ToString();
+                        GD.Print(string.IsNullOrEmpty(output) ? $"[{node.Name}] ok" : $"[{node.Name}] {output}");
+                    }
+                    catch (Exception e)
+                    {
+                        string msg = e.InnerException?.Message ?? e.Message;
+                        GD.PrintErr($"[{node.Name}] Error: {msg}");
+                    }
                 }
             }
-            catch (Exception e)
+            else
             {
-                string msg = e.InnerException?.Message ?? e.Message;
-                GD.PrintErr($"[Console] Error: {msg}");
+                try
+                {
+                    string? output = cmd.Invoke(args);
+                    if (!string.IsNullOrEmpty(output))
+                    {
+                        GD.Print($"[Console] {output}");
+                    }
+                }
+                catch (Exception e)
+                {
+                    string msg = e.InnerException?.Message ?? e.Message;
+                    GD.PrintErr($"[Console] Error: {msg}");
+                }
             }
+        }
+
+        private static List<Node> FindNodesOfType(Node root, Type targetType)
+        {
+            var results = new List<Node>();
+            if (targetType.IsInstanceOfType(root)) { results.Add(root); }
+            foreach (Node child in root.GetChildren())
+            {
+                results.AddRange(FindNodesOfType(child, targetType));
+            }
+            return results;
         }
     }
 }

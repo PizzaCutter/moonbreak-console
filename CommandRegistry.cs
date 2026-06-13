@@ -15,6 +15,8 @@ namespace Moonbreak
         public string Description = null!;
         public ParameterInfo[] Parameters = null!;
         public Func<string[], string?> Invoke = null!;
+        public MethodInfo? InstanceMethod;
+        public Type? TargetType;
     }
 
     public static class CommandRegistry
@@ -61,6 +63,27 @@ namespace Moonbreak
                             Invoke = invoke,
                         });
                     }
+
+                    foreach (MethodInfo method in type.GetMethods(
+                        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
+                    {
+                        ConsoleCommandAttribute? attr = method.GetCustomAttribute<ConsoleCommandAttribute>();
+                        if (attr == null) { continue; }
+
+                        string name = string.IsNullOrEmpty(attr.Name) ? method.Name : attr.Name;
+                        string category = string.IsNullOrEmpty(attr.Category) ? type.Name : attr.Category;
+
+                        _commands.Add(new CommandEntry
+                        {
+                            Name = name,
+                            Category = category,
+                            Description = attr.Description,
+                            Parameters = method.GetParameters(),
+                            InstanceMethod = method,
+                            TargetType = type,
+                            Invoke = null!,
+                        });
+                    }
                 }
             }
 
@@ -92,7 +115,7 @@ namespace Moonbreak
                 .ToList();
         }
 
-        private static object?[] ConvertArgs(string[] args, ParameterInfo[] parameters)
+        internal static object?[] ConvertArgs(string[] args, ParameterInfo[] parameters)
         {
             object?[] result = new object?[parameters.Length];
             for (int i = 0; i < parameters.Length; i++)
