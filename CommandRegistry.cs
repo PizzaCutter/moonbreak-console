@@ -17,6 +17,7 @@ namespace Moonbreak
         public Func<string[], string?> Invoke = null!;
         public MethodInfo? InstanceMethod;
         public Type? TargetType;
+        public CommandContext Context;
     }
 
     public static class CommandRegistry
@@ -24,6 +25,21 @@ namespace Moonbreak
         private static readonly List<CommandEntry> _commands = new();
 
         public static IReadOnlyList<CommandEntry> All => _commands;
+
+        public static IReadOnlyList<CommandEntry> AllForContext(CommandContext ctx)
+            => _commands.Where(c => c.Context == ctx || c.Context == CommandContext.Both).ToList();
+
+        public static List<CommandEntry> QueryForContext(string input, CommandContext ctx)
+        {
+            IReadOnlyList<CommandEntry> pool = AllForContext(ctx);
+            if (string.IsNullOrEmpty(input)) { return pool.ToList(); }
+            return pool
+                .Select(cmd => (cmd, score: FuzzySearch.Score(input, $"{cmd.Category}.{cmd.Name}")))
+                .Where(x => x.score >= 0)
+                .OrderByDescending(x => x.score)
+                .Select(x => x.cmd)
+                .ToList();
+        }
 
         public static void ScanAssemblies()
         {
@@ -61,6 +77,7 @@ namespace Moonbreak
                             Description = attr.Description,
                             Parameters = parameters,
                             Invoke = invoke,
+                            Context = attr.Context,
                         });
                     }
 
@@ -82,6 +99,7 @@ namespace Moonbreak
                             InstanceMethod = method,
                             TargetType = type,
                             Invoke = null!,
+                            Context = attr.Context,
                         });
                     }
                 }
@@ -113,6 +131,17 @@ namespace Moonbreak
                 .OrderByDescending(x => x.score)
                 .Select(x => x.cmd)
                 .ToList();
+        }
+
+        public static List<Node> FindNodesOfType(Node root, Type targetType)
+        {
+            var results = new List<Node>();
+            if (targetType.IsInstanceOfType(root)) { results.Add(root); }
+            foreach (Node child in root.GetChildren())
+            {
+                results.AddRange(FindNodesOfType(child, targetType));
+            }
+            return results;
         }
 
         internal static object?[] ConvertArgs(string[] args, ParameterInfo[] parameters)

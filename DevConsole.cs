@@ -28,7 +28,7 @@ namespace Moonbreak
             CommandRegistry.ScanAssemblies();
             LoadHistory();
 
-            _ui = new ConsoleUI();
+            _ui = new ConsoleUI { FilterContext = CommandContext.Game };
             AddChild(_ui);
             _ui.Hide();
         }
@@ -181,7 +181,7 @@ namespace Moonbreak
             string commandQuery = parts[0];
             string[] args = parts.Skip(1).ToArray();
 
-            List<CommandEntry> results = CommandRegistry.Query(commandQuery);
+            List<CommandEntry> results = CommandRegistry.QueryForContext(commandQuery, CommandContext.Game);
             if (results.Count == 0)
             {
                 GD.Print($"[Console] Unknown command: {commandQuery}");
@@ -193,7 +193,7 @@ namespace Moonbreak
 
             if (cmd.InstanceMethod != null)
             {
-                List<Node> matches = FindNodesOfType(GetTree().Root, cmd.TargetType!);
+                List<Node> matches = CommandRegistry.FindNodesOfType(GetTree().Root, cmd.TargetType!);
                 if (matches.Count == 0)
                 {
                     GD.Print($"[Console] {cmd.Name}: no instances found.");
@@ -233,15 +233,5 @@ namespace Moonbreak
             }
         }
 
-        private static List<Node> FindNodesOfType(Node root, Type targetType)
-        {
-            var results = new List<Node>();
-            if (targetType.IsInstanceOfType(root)) { results.Add(root); }
-            foreach (Node child in root.GetChildren())
-            {
-                results.AddRange(FindNodesOfType(child, targetType));
-            }
-            return results;
-        }
     }
 }

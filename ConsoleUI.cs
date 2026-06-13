@@ -1,4 +1,5 @@
 #nullable enable
+using System;
 using Godot;
 using System.Collections.Generic;
 using System.Reflection;
@@ -7,6 +8,10 @@ namespace Moonbreak
 {
     public partial class ConsoleUI : Control
     {
+        public CommandContext? FilterContext = null;
+        public Action<string>? ExecuteAction = null;
+        public Action? CloseAction = null;
+
         private LineEdit _inputBar = null!;
         private Label _countLabel = null!;
         private VBoxContainer _resultsList = null!;
@@ -25,7 +30,6 @@ namespace Moonbreak
         private static readonly Color TextDim    = new Color("#4a4a4a");
         private static readonly Color TextDesc   = new Color("#7a7a7a");
         private static readonly Color Border     = new Color("#222426");
-        private static readonly Color MatchColor = new Color("#3ddc84");
 
         private static StyleBoxFlat Flat(Color bg, int padH = 0, int padV = 0,
             int borderLeft = 0, Color? borderCol = null)
@@ -168,8 +172,8 @@ namespace Moonbreak
                 string text = _inputBar.Text.Trim();
                 if (!string.IsNullOrEmpty(text))
                 {
-                    DevConsole.Instance.ExecuteRaw(text);
-                    DevConsole.Instance.Close();
+                    if (ExecuteAction != null) { ExecuteAction(text); CloseAction?.Invoke(); }
+                    else { DevConsole.Instance.ExecuteRaw(text); DevConsole.Instance.Close(); }
                 }
                 return;
             }
@@ -179,8 +183,8 @@ namespace Moonbreak
             if (selected.Parameters.Length == 0 || hasParams)
             {
                 string raw = hasParams ? _inputBar.Text.Trim() : selected.Name;
-                DevConsole.Instance.ExecuteRaw(raw);
-                DevConsole.Instance.Close();
+                if (ExecuteAction != null) { ExecuteAction(raw); CloseAction?.Invoke(); }
+                else { DevConsole.Instance.ExecuteRaw(raw); DevConsole.Instance.Close(); }
             }
             else
             {
@@ -197,8 +201,13 @@ namespace Moonbreak
             }
             _rows.Clear();
 
-            _currentResults = CommandRegistry.Query(query);
-            _countLabel.Text = $"{_currentResults.Count}/{CommandRegistry.All.Count}";
+            _currentResults = FilterContext.HasValue
+                ? CommandRegistry.QueryForContext(query, FilterContext.Value)
+                : CommandRegistry.Query(query);
+            int total = FilterContext.HasValue
+                ? CommandRegistry.AllForContext(FilterContext.Value).Count
+                : CommandRegistry.All.Count;
+            _countLabel.Text = $"{_currentResults.Count}/{total}";
 
             for (int i = 0; i < _currentResults.Count; i++)
             {
@@ -233,11 +242,19 @@ namespace Moonbreak
             }
         }
 
-        private HBoxContainer BuildRowLabel(CommandEntry cmd, string key, HashSet<int>? matchPos)
+        private RichTextLabel BuildRowLabel(CommandEntry cmd, string key, HashSet<int>? matchPos)
         {
-            HBoxContainer hbox = new HBoxContainer();
-            hbox.AddThemeConstantOverride("separation", 0);
-            hbox.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            RichTextLabel rtl = new RichTextLabel
+            {
+                BbcodeEnabled = true,
+                FitContent = true,
+                ScrollActive = false,
+                AutowrapMode = TextServer.AutowrapMode.Off,
+                SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            };
+            rtl.AddThemeStyleboxOverride("normal", new StyleBoxEmpty());
+
+            System.Text.StringBuilder sb = new System.Text.StringBuilder();
 
             int i = 0;
             while (i < key.Length)
@@ -245,41 +262,20 @@ namespace Moonbreak
                 bool isMatch = matchPos != null && matchPos.Contains(i);
                 int j = i + 1;
                 while (j < key.Length && (matchPos != null && matchPos.Contains(j)) == isMatch) { j++; }
-
-                Label seg = new Label
-                {
-                    Text = key[i..j],
-                    AutowrapMode = TextServer.AutowrapMode.Off,
-                    VerticalAlignment = VerticalAlignment.Center,
-                };
-                seg.AddThemeColorOverride("font_color", isMatch ? MatchColor : TextMain);
-                hbox.AddChild(seg);
+                string color = (isMatch ? Accent : TextMain).ToHtml(false);
+                sb.Append($"[color=#{color}]{key[i..j]}[/color]");
                 i = j;
             }
 
             string paramHint = BuildParamHint(cmd.Parameters);
             if (!string.IsNullOrEmpty(paramHint))
-            {
-                Label hint = new Label
-                {
-                    Text = $" {paramHint}",
-                    AutowrapMode = TextServer.AutowrapMode.Off,
-                    VerticalAlignment = VerticalAlignment.Center,
-                };
-                hint.AddThemeColorOverride("font_color", TextDim);
-                hbox.AddChild(hint);
-            }
+                sb.Append($" [color=#{TextDim.ToHtml(false)}]{paramHint}[/color]");
 
-            Label desc = new Label
-            {
-                Text = $"  {cmd.Description}",
-                AutowrapMode = TextServer.AutowrapMode.Off,
-                VerticalAlignment = VerticalAlignment.Center,
-            };
-            desc.AddThemeColorOverride("font_color", TextDesc);
-            hbox.AddChild(desc);
+            if (!string.IsNullOrEmpty(cmd.Description))
+                sb.Append($"  [color=#{TextDesc.ToHtml(false)}]{cmd.Description}[/color]");
 
-            return hbox;
+            rtl.Text = sb.ToString();
+            return rtl;
         }
 
         private string BuildParamHint(ParameterInfo[] parameters)

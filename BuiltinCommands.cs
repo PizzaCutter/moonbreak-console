@@ -4,7 +4,7 @@ namespace Moonbreak
 {
     internal static class BuiltinCommands
     {
-        [ConsoleCommand(Name = "help", Category = "Console", Description = "Lists all registered commands")]
+        [ConsoleCommand(Name = "help", Category = "Console", Context = CommandContext.Both, Description = "Lists all registered commands")]
         private static string Help()
         {
             System.Text.StringBuilder lines = new System.Text.StringBuilder();
