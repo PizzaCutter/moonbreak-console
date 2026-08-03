@@ -36,6 +36,13 @@ namespace Moonbreak
             EditorInterface.Singleton.StopPlayingScene();
         }
 
+        [ConsoleCommand(Name = "ReloadEditor", Category = "Editor", Context = CommandContext.Editor,
+            Description = "Restart the editor (closes and reopens this project, saving first)")]
+        private static void ReloadEditor()
+        {
+            EditorInterface.Singleton.RestartEditor();
+        }
+
     }
 }
 #endif
